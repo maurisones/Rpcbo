@@ -6,7 +6,7 @@
 using namespace Rcpp;
 
 // pcbo
-NumericVector pcbo(NumericVector n, int ncpus, int minsupport);
+std::vector< std::string > pcbo(NumericVector n, int ncpus, int minsupport);
 RcppExport SEXP _Rpcbo_pcbo(SEXP nSEXP, SEXP ncpusSEXP, SEXP minsupportSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;

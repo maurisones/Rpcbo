@@ -46,6 +46,7 @@
 using namespace std;
 #include <Rcpp.h>
 using namespace Rcpp;
+#include <vector>
 
 #define BIT		((unsigned long) 1)
 #define NULL_LONG	((unsigned long) 0)
@@ -94,6 +95,8 @@ unsigned char **thread_queue_head;
 unsigned char **thread_queue_limit;
 unsigned long **thread_intents;
 NumericVector nv = NumericVector::create();
+std::vector< std::string > nvstr;
+
 
 #ifdef WINNT
 HANDLE output_lock;
@@ -101,12 +104,6 @@ HANDLE output_lock;
 pthread_mutex_t output_lock = PTHREAD_MUTEX_INITIALIZER;
 #endif
 
-#ifdef __APPLE__
-sem_t *sptr;
-#define s *sptr
-#else
-sem_t s;
-#endif
 
 struct thread_stat {
   int closures;
@@ -235,63 +232,123 @@ void read_context (FILE *file) {
   free (buff);
 }
 
-void print_attributes (const unsigned long *set) {
-  int i, j, c;
-  int buf_ptr = 0;
-  int locked = 0;
-  
-  if (verbosity_level <= 0)
-    return;
-  
-  for (c = j = 0; j < int_count_a; j++) {
-    for (i = ARCHBIT; i >= 0; i--) {
-      if (set[j] & (BIT << i)) {
-        sem_wait(&s);
-        nv.push_back(atoi(table_of_ints[c].str));
-        sem_post(&s);
-        buf_ptr += table_of_ints[c].length;
-        
-        if (buf_ptr >= OUTPUT_BUF_CAPACITY) {
-          if (!locked) {
+// void print_attributes_ze (const unsigned long *set) {
+//   int i, j, c;
+//   int buf_ptr = 0;
+//   int locked = 0;
+//   
+//   if (verbosity_level <= 0)
+//     return;
+//   
+//   for (c = j = 0; j < int_count_a; j++) {
+//     for (i = ARCHBIT; i >= 0; i--) {
+//       if (set[j] & (BIT << i)) {
+//         
+//         sem_wait(&s);
+//         nv.push_back(atoi(table_of_ints[c].str));
+//         sem_post(&s);
+//         buf_ptr += table_of_ints[c].length;
+//         
+//         if (buf_ptr >= OUTPUT_BUF_CAPACITY) {
+//           if (!locked) {
+// #ifdef WINNT
+//             WaitForSingleObject (output_lock, INFINITE);
+// #else
+//             pthread_mutex_lock (&output_lock);
+// #endif
+//             locked = 1;
+//           }
+//           sem_wait(&s);
+//           nv.push_back(-1);
+//           sem_post(&s);
+//           buf_ptr = 0;
+//         }
+//       }
+//       c++;
+//       
+//       if (c >= attributes)
+//         goto out;
+//     }
+//   }
+//   
+//   out:
+//     sem_wait(&s);
+//   nv.push_back(-1);
+//   sem_post(&s);
+//   
+//   if (!locked) {
+// #ifdef WINNT
+//     WaitForSingleObject (output_lock, INFINITE);
+// #else
+//     pthread_mutex_lock (&output_lock);
+// #endif
+//   }
+//   
+// #ifdef WINNT
+//   ReleaseMutex (output_lock);
+// #else
+//   pthread_mutex_unlock (&output_lock);
+// #endif
+// }
+
+
+void print_attributes (const unsigned long *set){
+    int i, j, c, first = 1;
+    char buf[OUTPUT_BUF_CAPACITY + MAX_DECIMAL_INT_SIZE + 2];
+    int buf_ptr = 0;
+    int locked = 0;
+    if (verbosity_level <= 0)
+      return;
+    for (c = j = 0; j < int_count_a; j++) {
+      for (i = ARCHBIT; i >= 0; i--) {
+        if (set[j] & (BIT << i)) {
+          if (!first)
+            buf[buf_ptr++] = ' ';
+          strcpy (buf + buf_ptr, table_of_ints[c].str);
+          buf_ptr += table_of_ints[c].length;
+          if (buf_ptr >= OUTPUT_BUF_CAPACITY) {
+            buf[buf_ptr] = '\0';
+            buf_ptr = 0;
+            if (!locked) {
 #ifdef WINNT
-            WaitForSingleObject (output_lock, INFINITE);
+              WaitForSingleObject (output_lock, INFINITE);
 #else
-            pthread_mutex_lock (&output_lock);
+              pthread_mutex_lock (&output_lock);
 #endif
-            locked = 1;
+              locked = 1;
+            }
+            //fputs (buf, out_file);
+            //printf("teste %s\n", buf);
+            nvstr.push_back(buf);
           }
-          sem_wait(&s);
-          nv.push_back(-1);
-          sem_post(&s);
-          buf_ptr = 0;
+          first = 0;
         }
+        c++;
+        if (c >= attributes)
+          goto out;
       }
-      c++;
-      
-      if (c >= attributes)
-        goto out;
     }
-  }
-  
-  out:
-    sem_wait(&s);
-  nv.push_back(-1);
-  sem_post(&s);
-  
-  if (!locked) {
+    out:
+      buf[buf_ptr++] = '\n';
+    buf[buf_ptr] = '\0';
+    if (!locked) {
 #ifdef WINNT
-    WaitForSingleObject (output_lock, INFINITE);
+      WaitForSingleObject (output_lock, INFINITE);
 #else
-    pthread_mutex_lock (&output_lock);
+      pthread_mutex_lock (&output_lock);
 #endif
-  }
-  
+    }
+    //fputs (buf, out_file);
+    //printf("teste %s\n", buf);
+    nvstr.push_back(buf);
 #ifdef WINNT
-  ReleaseMutex (output_lock);
+    ReleaseMutex (output_lock);
 #else
-  pthread_mutex_unlock (&output_lock);
+    pthread_mutex_unlock (&output_lock);
 #endif
 }
+
+
 
 void print_context_info (void) {
   if (verbosity_level >= 2)
@@ -625,15 +682,12 @@ void find_all_intents (void) {
 }
 
 // [[Rcpp::export]]
-NumericVector pcbo(NumericVector n, int ncpus, int minsupport) {
+std::vector< std::string > pcbo(NumericVector n, int ncpus, int minsupport) {
   cpus = ncpus;
   min_support = minsupport;
-  nv = NumericVector::create();
-#ifdef __APPLE__
-  sptr = sem_open("/s", O_CREAT, 0644, 1);
-#else
-  sem_init(&s, 0, 1);
-#endif  
+  nvstr.clear();
+  
+
   std::string str = ("");
   ofstream myfile("pcbo.txt", std::ofstream::trunc);
   
@@ -652,7 +706,9 @@ NumericVector pcbo(NumericVector n, int ncpus, int minsupport) {
     myfile.close();
   } else {
     Rcout << "Unable to open file.\n";
-    return -1;
+    vector<std::string> toret;
+    toret.push_back("Unable to open file.\n");
+    return  toret;
   }
   
   in_file = fopen("pcbo.txt", "rb");
@@ -666,7 +722,7 @@ NumericVector pcbo(NumericVector n, int ncpus, int minsupport) {
   initialize_algorithm ();
   find_all_intents ();
   
-  return nv;
+  return nvstr;
 }
 
 
