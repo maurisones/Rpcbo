@@ -9,10 +9,31 @@ computeExtents <- function(df, ncpus = 1, minsupport = 0){
   names(vetorToPCBO) <- NULL
   
   
-  retorno <- pcbo(vetorToPCBO, ncpus, minsupport)
-  retorno <- unlist(lapply(retorno, function(x){gsub("\n", "", x)}))
-  retorno <- lapply(retorno, function(x){as.numeric(unlist(strsplit(x, " "))) + 1})
+  extents <- pcbo(vetorToPCBO, ncpus, minsupport)
+  extents <- unlist(lapply(extents, function(x){gsub("\n", "", x)}))
+  extents <- lapply(extents, function(x){as.numeric(unlist(strsplit(x, " "))) + 1})
   
   
-  return(retorno)
+  return(extents)
+}
+
+
+computeIntents <- function(df, extents){
+  
+  intents <- list()
+  for (i in 1:length(extents)){
+    extent <- extents[[i]]
+    if (length(extent) > 1){
+      intents[[i]] <- which(rowSums(df[,extent]) == length(extent))
+    } else {
+      intents[[i]] <- which(df[,extent] == length(extent))
+    }
+  }
+  
+  # verifica quando o root é vazio
+  if (length(extents[[1]]) == 0){
+    intents[[1]] <- as.numeric(rownames(df))
+  }
+  
+  return(intents)
 }
