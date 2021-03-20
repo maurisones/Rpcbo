@@ -1,16 +1,27 @@
-
+#' Find the extents in the given data.frame
+#'
+#' This function call the pcbo algorithm to find the concepts in the context 
+#' represented in the dataframe passed as a parameter.
+#'
+#' @param df A data.frame with the forma concept data
+#' @param ncpus The number of cpu cores to be used for parallel processing
+#' @param minsupport The minumum support threshold
+#' @return A list containing the extents found in the given context
+#' @export
 computeExtents <- function(df, ncpus = 1, minsupport = 0){
   
-  # transforma a matriz em valores esparsos
+  # transform the matrix to a list of sparse values
   sparse <- apply(df, 1, function(x){ which(x == 1)})
   
-  # cria um único vetor separanado cada linha por -1
+  # creates a vector using -1 as line separator
   vetorToPCBO <- unlist(lapply(sparse, function(x){c(x, -1)}))
   names(vetorToPCBO) <- NULL
   
-  
+  # call the cpp pcbo
   extents <- pcbo(vetorToPCBO, ncpus, minsupport)
+  # replaces the line breaks in results
   extents <- unlist(lapply(extents, function(x){gsub("\n", "", x)}))
+  # convert values to numeric and add 1 - pcbo uses base 0
   extents <- lapply(extents, function(x){as.numeric(unlist(strsplit(x, " "))) + 1})
   
   
@@ -18,7 +29,34 @@ computeExtents <- function(df, ncpus = 1, minsupport = 0){
 }
 
 
-computeIntents <- function(df, extents){
+computeIntents <- function(df, extents, threads = 1){
+
+  cl <- parallel::makeCluster(2)
+  doParallel::registerDoParallel(cl)
+  
+  intents <- foreach (i = 1:length(extents)) %dopar%{
+    extent <- extents[[i]]
+    if (length(extent) > 1){
+      intent <- which(rowSums(df[,extent]) == length(extent))
+    } else {
+      intent <- which(df[,extent] == length(extent))
+    }
+    
+  }
+  
+  # verifica quando o root é vazio
+  if (length(extents[[1]]) == 0){
+    intents[[1]] <- as.numeric(rownames(df))
+  }
+  
+  parallel::stopCluster(cl)
+  
+  return(intents)
+}
+
+
+
+computeIntentsSerial <- function(df, extents){
   
   intents <- list()
   for (i in 1:length(extents)){
@@ -37,3 +75,4 @@ computeIntents <- function(df, extents){
   
   return(intents)
 }
+
