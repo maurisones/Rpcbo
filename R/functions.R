@@ -8,7 +8,7 @@
 #' @param minsupport The minumum support threshold
 #' @return A list containing the extents found in the given context
 #' @export
-computeExtents <- function(df, ncpus = 1, minsupport = 0){
+computeExtents <- function(df, threads = 1, minsupport = 0){
   
   # transform the matrix to a list of sparse values
   sparse <- apply(df, 1, function(x){ which(x == 1)})
@@ -18,7 +18,7 @@ computeExtents <- function(df, ncpus = 1, minsupport = 0){
   names(vetorToPCBO) <- NULL
   
   # call the cpp pcbo
-  extents <- pcbo(vetorToPCBO, ncpus, minsupport)
+  extents <- pcbo(vetorToPCBO, threads, minsupport)
   # replaces the line breaks in results
   extents <- unlist(lapply(extents, function(x){gsub("\n", "", x)}))
   # convert values to numeric and add 1 - pcbo uses base 0
@@ -31,8 +31,8 @@ computeExtents <- function(df, ncpus = 1, minsupport = 0){
 
 computeIntents <- function(df, extents, threads = 1){
 
-  cl <- parallel::makeCluster(2)
-  doParallel::registerDoParallel(cl)
+  cl_computeintents <- parallel::makeCluster(threads)
+  doParallel::registerDoParallel(cl_computeintents)
   
   intents <- foreach (i = 1:length(extents)) %dopar%{
     extent <- extents[[i]]
@@ -49,7 +49,7 @@ computeIntents <- function(df, extents, threads = 1){
     intents[[1]] <- as.numeric(rownames(df))
   }
   
-  parallel::stopCluster(cl)
+  doParallel::stopImplicitCluster()
   
   return(intents)
 }
