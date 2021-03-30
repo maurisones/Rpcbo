@@ -57,7 +57,7 @@ using namespace Rcpp;
 #define BYTE_COUNT_O	(LONG_SIZE * int_count_o)
 #define BUFFER_BLOCK	1024
 #define MAX_DECIMAL_INT_SIZE (8)
-#define OUTPUT_BUF_CAPACITY (32 * MAX_DECIMAL_INT_SIZE)
+#define OUTPUT_BUF_CAPACITY (32000 * MAX_DECIMAL_INT_SIZE)
 
 struct str_int {
   char str[MAX_DECIMAL_INT_SIZE];
