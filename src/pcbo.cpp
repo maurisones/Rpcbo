@@ -47,6 +47,7 @@ using namespace std;
 #include <Rcpp.h>
 using namespace Rcpp;
 #include <vector>
+#include <sstream>
 
 #define BIT		((unsigned long) 1)
 #define NULL_LONG	((unsigned long) 0)
@@ -687,7 +688,7 @@ std::vector< std::string > pcbo(NumericVector n, int ncpus, int minsupport) {
   min_support = minsupport;
   nvstr.clear();
   
-
+  //TODO: eliminate the temp file generation
   std::string str = ("");
   ofstream myfile("pcbo.txt", std::ofstream::trunc);
   
@@ -699,7 +700,11 @@ std::vector< std::string > pcbo(NumericVector n, int ncpus, int minsupport) {
         continue;
       }
       
-      str += std::to_string(int(n[i]));
+      // the std:to_string was given compilations errors with some gcc versions
+      std::ostringstream stm ;
+      stm << n[i];
+      
+      str += stm.str();
       str += ' ';
     }
     
