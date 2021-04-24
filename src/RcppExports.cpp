@@ -6,15 +6,15 @@
 using namespace Rcpp;
 
 // pcbo
-std::vector< std::string > pcbo(NumericVector n, int ncpus, int minsupport);
-RcppExport SEXP _Rpcbo_pcbo(SEXP nSEXP, SEXP ncpusSEXP, SEXP minsupportSEXP) {
+std::vector< std::string > pcbo(Rcpp::CharacterVector sin, int ncpus, int minsupport);
+RcppExport SEXP _Rpcbo_pcbo(SEXP sinSEXP, SEXP ncpusSEXP, SEXP minsupportSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< NumericVector >::type n(nSEXP);
+    Rcpp::traits::input_parameter< Rcpp::CharacterVector >::type sin(sinSEXP);
     Rcpp::traits::input_parameter< int >::type ncpus(ncpusSEXP);
     Rcpp::traits::input_parameter< int >::type minsupport(minsupportSEXP);
-    rcpp_result_gen = Rcpp::wrap(pcbo(n, ncpus, minsupport));
+    rcpp_result_gen = Rcpp::wrap(pcbo(sin, ncpus, minsupport));
     return rcpp_result_gen;
 END_RCPP
 }

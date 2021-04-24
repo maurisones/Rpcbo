@@ -49,6 +49,7 @@ using namespace Rcpp;
 #include <vector>
 #include <sstream>
 
+
 #define BIT		((unsigned long) 1)
 #define NULL_LONG	((unsigned long) 0)
 #define INT_SIZE	(sizeof (int))
@@ -97,6 +98,7 @@ unsigned char **thread_queue_limit;
 unsigned long **thread_intents;
 NumericVector nv = NumericVector::create();
 std::vector< std::string > nvstr;
+unsigned int pos_s = 0;
 
 
 #ifdef WINNT
@@ -114,38 +116,6 @@ struct thread_stat {
 
 struct thread_stat *counts;
 struct thread_stat initial_thr_stat;
-
-int get_next_integer (FILE *file, int *value) {
-  int ch = ' ';
-  *value = -1;
-  
-  while ((ch != EOF) && ((ch < '0') || (ch > '9'))) {
-    ch = fgetc (file);
-    if (ch == '\n')
-      return 1;
-  }
-  
-  if (ch == EOF)
-    return 0;
-  
-  *value = 0;
-  
-  while ((ch >= '0') && (ch <= '9')) {
-    *value *= 10;
-    *value += ch - '0';
-    ch = fgetc (file);
-  }
-  
-  ungetc (ch, file);
-  *value -= attr_offset;
-  
-  if (*value < 0) {
-    Rprintf("Invalid input value: %i (minimum value is %i), quitting.\n",
-            *value + attr_offset, attr_offset);
-    exit (1);
-  }
-  return 1;
-}
 
 #define PUSH_NEW_INTEGER(__value) {                                \
 if ((size_t)index >= buff_size) {                                  \
@@ -171,7 +141,60 @@ void table_of_ints_init (int max) {
   
 }
 
-void read_context (FILE *file) {
+
+int get_next_integer (string s, int *value) {
+  
+  //Rcout << "pos_s: " << pos_s << "\n";
+  
+  int ch = ' ';
+  *value = -1;
+  
+  while ((pos_s < s.size()) && ((ch < '0') || (ch > '9'))) {
+    ch = s[pos_s];
+    pos_s++;
+    if (ch == '\n')
+      return 1;
+  }
+  
+  if (pos_s == s.size())
+    return 0;
+  
+  *value = 0;
+  
+  while ((ch >= '0') && (ch <= '9')) {
+    *value *= 10;
+    *value += ch - '0';
+    ch = s[pos_s];
+    pos_s++;
+  }
+  
+  *value -= attr_offset;
+  
+  //Rcout << "value: " << *value << "\n";
+  
+  if (*value < 0) {
+    Rprintf("Invalid input value: %i (minimum value is %i), quitting.\n",
+            *value + attr_offset, attr_offset);
+    exit (1);
+  }
+  return 1;
+}
+
+#define PUSH_NEW_INTEGER(__value) {                                \
+if ((size_t)index >= buff_size) {                                  \
+  buff_size += BUFFER_BLOCK;                                       \
+  buff = (int *) realloc (buff, INT_SIZE * buff_size);             \
+  if (! buff) {                                                    \
+    Rprintf("Cannot reallocate buffer, quitting.\n");              \
+    exit (4);                                                      \
+  }                                                                \
+}                                                                  \
+buff [index] = (__value);                                          \
+index ++;                                                          \
+}
+
+
+void read_context (string s) {
   int last_value = -1, value = 0, last_attribute = -1, last_object = -1;
   int *buff, i, index = 0, row = 0;
   size_t buff_size = BUFFER_BLOCK;
@@ -186,7 +209,7 @@ void read_context (FILE *file) {
     exit (3);
   }
   
-  while (get_next_integer (file, &value)) {
+  while (get_next_integer (s, &value)) {
     if ((value < 0) && (last_value < 0))
       continue;
     
@@ -232,65 +255,6 @@ void read_context (FILE *file) {
   
   free (buff);
 }
-
-// void print_attributes_ze (const unsigned long *set) {
-//   int i, j, c;
-//   int buf_ptr = 0;
-//   int locked = 0;
-//   
-//   if (verbosity_level <= 0)
-//     return;
-//   
-//   for (c = j = 0; j < int_count_a; j++) {
-//     for (i = ARCHBIT; i >= 0; i--) {
-//       if (set[j] & (BIT << i)) {
-//         
-//         sem_wait(&s);
-//         nv.push_back(atoi(table_of_ints[c].str));
-//         sem_post(&s);
-//         buf_ptr += table_of_ints[c].length;
-//         
-//         if (buf_ptr >= OUTPUT_BUF_CAPACITY) {
-//           if (!locked) {
-// #ifdef WINNT
-//             WaitForSingleObject (output_lock, INFINITE);
-// #else
-//             pthread_mutex_lock (&output_lock);
-// #endif
-//             locked = 1;
-//           }
-//           sem_wait(&s);
-//           nv.push_back(-1);
-//           sem_post(&s);
-//           buf_ptr = 0;
-//         }
-//       }
-//       c++;
-//       
-//       if (c >= attributes)
-//         goto out;
-//     }
-//   }
-//   
-//   out:
-//     sem_wait(&s);
-//   nv.push_back(-1);
-//   sem_post(&s);
-//   
-//   if (!locked) {
-// #ifdef WINNT
-//     WaitForSingleObject (output_lock, INFINITE);
-// #else
-//     pthread_mutex_lock (&output_lock);
-// #endif
-//   }
-//   
-// #ifdef WINNT
-//   ReleaseMutex (output_lock);
-// #else
-//   pthread_mutex_unlock (&output_lock);
-// #endif
-// }
 
 
 void print_attributes (const unsigned long *set){
@@ -683,46 +647,20 @@ void find_all_intents (void) {
 }
 
 // [[Rcpp::export]]
-std::vector< std::string > pcbo(NumericVector n, int ncpus, int minsupport) {
+std::vector< std::string > pcbo(Rcpp::CharacterVector sin, int ncpus, int minsupport) {
   cpus = ncpus;
   min_support = minsupport;
   nvstr.clear();
   
-  //TODO: eliminate the temp file generation
-  std::string str = ("");
-  ofstream myfile("pcbo.txt", std::ofstream::trunc);
-  
-  if(myfile.is_open( )) {
-    for(int i = 0; i < n.length(); i++) { 
-      if(n[i] == -1) {
-        myfile << str << '\n';
-        str = ("");
-        continue;
-      }
-      
-      // the std:to_string was given compilations errors with some gcc versions
-      std::ostringstream stm ;
-      stm << n[i];
-      
-      str += stm.str();
-      str += ' ';
-    }
-    
-    myfile.close();
-  } else {
-    Rcout << "Unable to open file.\n";
-    vector<std::string> toret;
-    toret.push_back("Unable to open file.\n");
-    return  toret;
-  }
-  
-  in_file = fopen("pcbo.txt", "rb");
-  
+  std::string sins = Rcpp::as<std::string>(sin);
+  pos_s = 0;
+ 
 #ifdef WINNT
   output_lock = CreateMutex (NULL, FALSE, NULL);
 #endif
-  read_context (in_file);
-  fclose (in_file);
+
+  read_context(sins);
+  
   print_context_info ();
   initialize_algorithm ();
   find_all_intents ();
