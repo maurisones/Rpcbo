@@ -85,7 +85,7 @@ computeIntents <- function(df, extents, threads = 1){
     intents[[1]] <- as.numeric(rownames(df))
   }
   
-  doParallel::stopImplicitCluster()
+  parallel::stopCluster(cl_computeintents)
   
   return(intents)
 }
